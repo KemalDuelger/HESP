@@ -1,0 +1,18 @@
+# Makefile for mingw32-make on Windows
+
+# Compiler
+NVCC = nvcc.exe
+
+# Source and output
+SRC = stream-cuda.cu
+OUT = stream-cuda.exe
+
+# Default target
+all: $(OUT)
+
+$(OUT): $(SRC)
+	$(NVCC) $(SRC) -o $(OUT)
+
+# Clean target
+clean:
+	del /Q $(OUT)
