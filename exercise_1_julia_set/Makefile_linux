@@ -1,0 +1,18 @@
+# Makefile for Linux
+
+# Compiler
+NVCC = nvcc
+
+# Source and output
+SRC = julia-set.cu lodepng.cpp
+OUT = julia-set
+
+# Default target
+all: $(OUT)
+
+$(OUT): $(SRC)
+    $(NVCC) $(SRC) -o $(OUT)
+
+# Clean target
+clean:
+    rm -f $(OUT)
