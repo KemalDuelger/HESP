@@ -61,11 +61,13 @@ Config ConfigParser::parse(const std::string& filename) {
     // Zusammensetzen der Partikel
     size_t n = std::min({positions.size(), velocities.size(), masses.size()});
     for (size_t i = 0; i < n; ++i) {
-        config.particles.push_back({
-            positions[i],
-            velocities[i],
-            masses[i]
-        });
+        Particle p;
+        p.position = positions[i];
+        p.velocity = velocities[i];
+        p.mass = masses[i];
+        p.force = {0, 0, 0};         
+        p.acceleration = {0, 0, 0};  
+        config.particles.push_back(p);
     }
 
     return config;
@@ -81,6 +83,8 @@ std::ostream& operator<<(std::ostream& os, const Vector3& vec) {
 std::ostream& operator<<(std::ostream& os, const Particle& particle) {
     os << "  Position: " << particle.position << "\n"
        << "  Velocity: " << particle.velocity << "\n"
+       << "  Force: " << particle.force << "\n"
+       << "  Acceleration: " << particle.acceleration << "\n"
        << "  Mass: " << particle.mass;
     return os;
 }

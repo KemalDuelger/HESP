@@ -6,11 +6,11 @@
 #include <ostream>
 
 struct Vector3 {
-    float x = 0;
-    float y = 0;
-    float z = 0;
+    float x;
+    float y;
+    float z;
 
-    Vector3(float x,float y,float z) : x(x), y(y), z(z) {}
+    Vector3(float x = 0,float y = 0,float z = 0) : x(x), y(y), z(z) {}
 };
 
 struct Particle {
@@ -18,6 +18,7 @@ struct Particle {
     Vector3 velocity;
     float mass;
     Vector3 force;
+    Vector3 acceleration;
 };
 
 struct Config {
