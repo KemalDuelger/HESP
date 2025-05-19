@@ -18,12 +18,12 @@ Config ConfigParser::parse(const std::string& filename) {
     while (std::getline(infile, line)) {
         if (line.find("num_time_step") != std::string::npos) {
             config.num_time_step = std::stoi(line.substr(line.find("=") + 1));
-        } else if (line.find("time_step_lenth") != std::string::npos) {
+        } else if (line.find("time_step_length") != std::string::npos) {
             config.time_step_length = std::stoi(line.substr(line.find("=") + 1));
         } else if (line.find("sigma") != std::string::npos) {
-            config.sigma = std::stof(line.substr(line.find("=") + 1));
+            config.sigma = std::stod(line.substr(line.find("=") + 1));
         } else if (line.find("epsilon") != std::string::npos) {
-            config.epsilon = std::stof(line.substr(line.find("=") + 1));
+            config.epsilon = std::stod(line.substr(line.find("=") + 1));
         } else if (line.find("particle_num") != std::string::npos) {
             config.particle_num = std::stoi(line.substr(line.find("=") + 1));
         } else if (line.find("particle_positions") != std::string::npos) {
@@ -31,9 +31,9 @@ Config ConfigParser::parse(const std::string& filename) {
                 std::smatch match;
                 if (std::regex_search(line, match, vector_regex)) {
                     positions.push_back({
-                        std::stof(match[1]),
-                        std::stof(match[2]),
-                        std::stof(match[3])
+                        std::stod(match[1]),
+                        std::stod(match[2]),
+                        std::stod(match[3])
                     });
                 }
             }
@@ -42,9 +42,9 @@ Config ConfigParser::parse(const std::string& filename) {
                 std::smatch match;
                 if (std::regex_search(line, match, vector_regex)) {
                     velocities.push_back({
-                        std::stof(match[1]),
-                        std::stof(match[2]),
-                        std::stof(match[3])
+                        std::stod(match[1]),
+                        std::stod(match[2]),
+                        std::stod(match[3])
                     });
                 }
             }
@@ -52,7 +52,7 @@ Config ConfigParser::parse(const std::string& filename) {
             while (std::getline(infile, line) && line.find("};") == std::string::npos) {
                 std::smatch match;
                 if (std::regex_search(line, match, number_regex)) {
-                    masses.push_back(std::stof(match[0]));
+                    masses.push_back(std::stod(match[0]));
                 }
             }
         }

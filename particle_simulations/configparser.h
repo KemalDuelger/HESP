@@ -6,17 +6,17 @@
 #include <ostream>
 
 struct Vector3 {
-    float x;
-    float y;
-    float z;
+    double x;
+    double y;
+    double z;
 
-    Vector3(float x = 0,float y = 0,float z = 0) : x(x), y(y), z(z) {}
+    Vector3(double x = 0,double y = 0,double z = 0) : x(x), y(y), z(z) {}
 };
 
 struct Particle {
     Vector3 position;
     Vector3 velocity;
-    float mass;
+    double mass;
     Vector3 force;
     Vector3 acceleration;
 };
@@ -24,8 +24,8 @@ struct Particle {
 struct Config {
     int num_time_step = 0;
     int time_step_length = 0;
-    float sigma = 0.0f;
-    float epsilon = 0.0f;
+    double sigma = 0.0f;
+    double epsilon = 0.0f;
     int particle_num = 0;
     std::vector<Particle> particles;
 };

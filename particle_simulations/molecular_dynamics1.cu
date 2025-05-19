@@ -5,7 +5,7 @@
 #include <cmath>
 #include <fstream>
 
-void computeForces(std::vector<Particle> particles, Config config, int LSYS) {
+void computeForces(std::vector<Particle>& particles, Config config, int LSYS) {
     // Berechnung der Kräfte für alle Partikel
     for (size_t i = 0; i < particles.size(); ++i) {
         particles[i].force = {0, 0, 0};
@@ -25,13 +25,13 @@ void computeForces(std::vector<Particle> particles, Config config, int LSYS) {
             double abstand = sqrt(dx*dx + dy*dy + dz*dz);
 
             // Hier Kraft berechnen, z.B. Lennard-Jones, etc.
-            particles[i].force.x = 24 * config.epsilon * pow(config.sigma / abstand, 6) *(2 * pow(config.sigma / abstand, 6) -1) * dx / (abstand*abstand);
-            particles[i].force.y = 24 * config.epsilon * pow(config.sigma / abstand, 6) *(2 * pow(config.sigma / abstand, 6) -1) * dy / (abstand*abstand);
-            particles[i].force.z = 24 * config.epsilon * pow(config.sigma / abstand, 6) *(2 * pow(config.sigma / abstand, 6) -1) * dz / (abstand*abstand);
+            particles[i].force.x += 24 * config.epsilon * pow(config.sigma / abstand, 6) *(2 * pow(config.sigma / abstand, 6) -1) * dx / (abstand*abstand);
+            particles[i].force.y += 24 * config.epsilon * pow(config.sigma / abstand, 6) *(2 * pow(config.sigma / abstand, 6) -1) * dy / (abstand*abstand);
+            particles[i].force.z +=24 * config.epsilon * pow(config.sigma / abstand, 6) *(2 * pow(config.sigma / abstand, 6) -1) * dz / (abstand*abstand);
 
         }
 
-        particles[i].force.y += 9.81 * particles[i].mass;
+        particles[i].force.y -= 9.81 * particles[i].mass;
     }
 }
 
@@ -65,24 +65,32 @@ void updateAccelerationAndFullStepVelocity(std::vector<Particle>& particles, flo
 }
 
 void writeToVTK(const std::vector<Particle>& particles, int step) {
-    std::string filename = "output_" + std::to_string(step) + ".vtk";
+    std::string filename = "vtk_files/output_" + std::to_string(step) + ".vtk";
     std::ofstream ofs(filename);
     if (!ofs) {
         std::cerr << "Fehler beim Öffnen der Datei: " << filename << std::endl;
         return;
     }
 
-    ofs << "# vtk DataFile Version 3.0\n";
-    ofs << "Particle data\n";
+    ofs << "# vtk DataFile Version 4.0\n";
+    ofs << "hesp visualization file\n";
     ofs << "ASCII\n";
-    ofs << "DATASET POLYDATA\n";
-    ofs << "POINTS " << particles.size() << " float\n";
+    ofs << "DATASET UNSTRUCTURED_GRID\n";
+    ofs << "POINTS " << particles.size() << " double\n";
     for (const auto& p : particles) {
         ofs << p.position.x << " " << p.position.y << " " << p.position.z << "\n";
     }
-    ofs << "VERTICES " << particles.size() << " " << particles.size() * 2 << "\n";
-    for (size_t i = 0; i < particles.size(); ++i) {
-        ofs << "1 " << i << "\n";
+    ofs << "CELLS 0 0" << "\n";
+    ofs << "CELL_TYPES 0" << "\n";
+    ofs << "POINT_DATA " << particles.size() << "\n";
+    ofs << "SCALARS m double" << "\n";
+    ofs << "LOOKUP_TABLE default" << "\n";
+    for (const auto& p : particles) {
+        ofs << p.mass << "\n";
+    }
+    ofs << "VECTORS v double" << "\n";
+    for (const auto& p : particles) {
+        ofs << p.velocity.x << " " << p.velocity.y << " " << p.velocity.z << "\n";
     }
     ofs.close();
 }
@@ -97,9 +105,9 @@ int main(int argc, char* argv[]) {
     
     std::vector<Particle> particles = config.particles;
 
-    const int numSteps = 10000;       // Anzahl der Zeitschritte
+
     const int LSYS = 100;            // Systemgröße (z.B. Boxgröße)
-    for (int t = 0; t < numSteps; ++t) {
+    for (int t = 0; t < config.num_time_step; ++t) {
         // 1. Positionen aktualisieren (Velocity-Verlet Schritt 1)
         updatePositionAndHalfStepVelocity(particles, config.time_step_length);
 
@@ -109,6 +117,9 @@ int main(int argc, char* argv[]) {
         // 3. Geschwindigkeiten aktualisieren (Velocity-Verlet Schritt 2)
         updateAccelerationAndFullStepVelocity(particles, config.time_step_length);
 
+        for (auto particle : particles) {
+        std::cout << particle << std::endl;
+        }
         // 4. Optional: Ausgabe alle n Schritte
         if (t % 100 == 0) {
             writeToVTK(particles, t);
