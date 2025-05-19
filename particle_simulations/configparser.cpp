@@ -19,7 +19,7 @@ Config ConfigParser::parse(const std::string& filename) {
         if (line.find("num_time_step") != std::string::npos) {
             config.num_time_step = std::stoi(line.substr(line.find("=") + 1));
         } else if (line.find("time_step_length") != std::string::npos) {
-            config.time_step_length = std::stoi(line.substr(line.find("=") + 1));
+            config.time_step_length = std::stod(line.substr(line.find("=") + 1));
         } else if (line.find("sigma") != std::string::npos) {
             config.sigma = std::stod(line.substr(line.find("=") + 1));
         } else if (line.find("epsilon") != std::string::npos) {

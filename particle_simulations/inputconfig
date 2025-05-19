@@ -1,5 +1,5 @@
 num_time_step = 10000;
-time_step_length = 0.005;
+time_step_length = 1;
 
 sigma = 1;
 epsilon = 1;

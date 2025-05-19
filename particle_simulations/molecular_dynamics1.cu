@@ -18,10 +18,11 @@ void computeForces(std::vector<Particle>& particles, Config config, int LSYS) {
             double dz = particles[j].position.z - particles[i].position.z;
 
             // Minimum-Image-Kriterium anwenden
+            /*
             dx -= LSYS * round(dx / LSYS);
             dy -= LSYS * round(dy / LSYS);
             dz -= LSYS * round(dz / LSYS);
-
+            */
             double abstand = sqrt(dx*dx + dy*dy + dz*dz);
 
             // Hier Kraft berechnen, z.B. Lennard-Jones, etc.
@@ -108,6 +109,9 @@ int main(int argc, char* argv[]) {
 
     const int LSYS = 100;            // Systemgröße (z.B. Boxgröße)
     for (int t = 0; t < config.num_time_step; ++t) {
+        for (auto particle : particles) {
+        std::cout << particle << std::endl;
+        }
         // 1. Positionen aktualisieren (Velocity-Verlet Schritt 1)
         updatePositionAndHalfStepVelocity(particles, config.time_step_length);
 
@@ -117,9 +121,7 @@ int main(int argc, char* argv[]) {
         // 3. Geschwindigkeiten aktualisieren (Velocity-Verlet Schritt 2)
         updateAccelerationAndFullStepVelocity(particles, config.time_step_length);
 
-        for (auto particle : particles) {
-        std::cout << particle << std::endl;
-        }
+
         // 4. Optional: Ausgabe alle n Schritte
         if (t % 100 == 0) {
             writeToVTK(particles, t);
