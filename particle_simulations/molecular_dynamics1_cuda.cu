@@ -7,27 +7,29 @@
 
 
 // CUDA-Kernel für computeForces
-__global__ void computeForcesKernel(Particle* particles, int n, double epsilon, double sigma, int LSYS) {
+__global__ void computeForcesKernel(Particle* particles, int n, double epsilon, double sigma) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= n) return;
-
+    particles[i].force.x = 0.0;
+    particles[i].force.y = 0.0;
+    particles[i].force.z = 0.0;
     for (int j = 0; j < n; ++j) {
         if (i == j) continue;
         double dx = particles[j].position.x - particles[i].position.x;
         double dy = particles[j].position.y - particles[i].position.y;
         double dz = particles[j].position.z - particles[i].position.z;
-        // Minimum-Image-Kriterium
-        dx -= LSYS * round(dx / LSYS);
-        dy -= LSYS * round(dy / LSYS);
-        dz -= LSYS * round(dz / LSYS);
-        double abstand = sqrt(dx*dx + dy*dy + dz*dz);
-        if (abstand == 0) continue;
-        double lj = 24 * epsilon * pow(sigma / abstand, 6) * (2 * pow(sigma / abstand, 6) - 1) / (abstand*abstand);
+        // // Minimum-Image-Kriterium
+        // dx -= LSYS * round(dx / LSYS);
+        // dy -= LSYS * round(dy / LSYS);
+        // dz -= LSYS * round(dz / LSYS);
+        double distance = sqrt(dx*dx + dy*dy + dz*dz);
+
+        double lj = (24 * epsilon * pow(sigma / distance, 6) * (2 * pow(sigma / distance, 6) - 1)) / pow(distance, 2);
         particles[i].force.x += lj * dx;
         particles[i].force.y += lj * dy;
         particles[i].force.z += lj * dz;
     }
-    particles[i].force.y -= 9.81 * particles[i].mass;
+    // particles[i].force.y -= 9.81 * particles[i].mass;
 }
 
 // CUDA-Kernel für updatePositionAndHalfStepVelocity
@@ -63,7 +65,7 @@ void writeToVTK(const std::vector<Particle>& particles, int step) {
     std::string filename = "vtk_files/output_" + std::to_string(step) + ".vtk";
     std::ofstream ofs(filename);
     if (!ofs) {
-        std::cerr << "Fehler beim Öffnen der Datei: " << filename << std::endl;
+        std::cerr << "Error opening file: " << filename << std::endl;
         return;
     }
 
@@ -97,7 +99,7 @@ int main(int argc, char* argv[]) {
     Config config = ConfigParser::parse(argv[1]);
     std::vector<Particle> particles = config.particles;
     int n = particles.size();
-    const int LSYS = 100;
+    // const int LSYS = 100;
 
     // Speicher auf GPU anlegen und kopieren
     Particle* d_particles;
@@ -111,14 +113,14 @@ int main(int argc, char* argv[]) {
         updatePositionAndHalfStepVelocityKernel<<<blocks, threads>>>(d_particles, n, config.time_step_length);
         cudaDeviceSynchronize();
 
-        computeForcesKernel<<<blocks, threads>>>(d_particles, n, config.epsilon, config.sigma, LSYS);
+        computeForcesKernel<<<blocks, threads>>>(d_particles, n, config.epsilon, config.sigma);
         cudaDeviceSynchronize();
 
         updateAccelerationAndFullStepVelocityKernel<<<blocks, threads>>>(d_particles, n, config.time_step_length);
         cudaDeviceSynchronize();
 
         // Ausgabe alle 100 Schritte
-        if (t % 100 == 0) {
+        if (t % 10 == 0) {
             cudaMemcpy(particles.data(), d_particles, n * sizeof(Particle), cudaMemcpyDeviceToHost);
             writeToVTK(particles, t);
         }
