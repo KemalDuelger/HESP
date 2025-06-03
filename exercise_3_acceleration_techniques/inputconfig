@@ -1,0 +1,22 @@
+num_time_step = 10000;
+time_step_length = 0.001;
+
+sigma = 0.7;
+epsilon = 0.001;
+LSYS = 20;
+particle_num = 2;
+
+particle_positions =  {
+    (1,0,0),
+    (9,0,0),
+};
+
+particle_velocities =  {
+    (0,0,0),
+    (0,0,0),
+};
+
+particle_masses =  {
+    1,
+    1,
+};
