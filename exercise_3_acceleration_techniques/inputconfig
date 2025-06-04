@@ -1,14 +1,15 @@
 num_time_step = 10000;
-time_step_length = 0.001;
+time_step_length = 0.005;
 
-sigma = 0.7;
-epsilon = 0.001;
-LSYS = 20;
+sigma = 1;
+epsilon = 1;
+LSYS = 5;
 particle_num = 2;
+cut_off_radius = 20;
 
 particle_positions =  {
-    (1,0,0),
-    (9,0,0),
+    (0.01, 0.01,0),
+    (3,3,0),
 };
 
 particle_velocities =  {

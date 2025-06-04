@@ -7,7 +7,7 @@
 
 
 // CUDA-Kernel für computeForces
-__global__ void computeForcesKernel(Particle* particles, int n, double epsilon, double sigma, int LSYS) {
+__global__ void computeForcesKernel(Particle* particles, int n, double epsilon, double sigma, int LSYS, double cut_off_radius) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= n) return;
 
@@ -29,15 +29,19 @@ __global__ void computeForcesKernel(Particle* particles, int n, double epsilon, 
         dz -= LSYS * round(dz / LSYS);
 
         double r2 = dx * dx + dy * dy + dz * dz;
+
+        // Cut Off Radius
+        if (r2 > cut_off_radius*cut_off_radius) continue;
+
         double r = sqrt(r2);
 
         double s_over_r = sigma / r;
         double s_over_r6 = pow(s_over_r, 6);
         double lj_scalar = (24 * epsilon * s_over_r6 * (2 * s_over_r6 - 1)) / r2;
 
-        pi.force.x += lj_scalar * dx;
-        pi.force.y += lj_scalar * dy;
-        pi.force.z += lj_scalar * dz;
+        pi.force.x -= lj_scalar * dx;
+        pi.force.y -= lj_scalar * dy;
+        pi.force.z -= lj_scalar * dz;
     }
 
     // Optional: Schwerkraft in -y-Richtung hinzufügen
@@ -94,7 +98,7 @@ __global__ void updateAccelerationAndFullStepVelocityKernel(Particle* particles,
 }
 
 // Host-Funktion für VTK-Ausgabe (wie gehabt)
-void writeToVTK(const std::vector<Particle>& particles, int step) {
+void writeToVTK(const std::vector<Particle>& particles, int step, int LSYS) {
     std::string filename = "vtk_files/output_" + std::to_string(step) + ".vtk";
     std::ofstream ofs(filename);
     if (!ofs) {
@@ -147,7 +151,7 @@ int main(int argc, char* argv[]) {
         updatePositionAndHalfStepVelocityKernel<<<blocks, threads>>>(d_particles, n, config.time_step_length, config.LSYS);
         cudaDeviceSynchronize();
 
-        computeForcesKernel<<<blocks, threads>>>(d_particles, n, config.epsilon, config.sigma, config.LSYS);
+        computeForcesKernel<<<blocks, threads>>>(d_particles, n, config.epsilon, config.sigma, config.LSYS, config.cut_off_radius);
         cudaDeviceSynchronize();
 
         updateAccelerationAndFullStepVelocityKernel<<<blocks, threads>>>(d_particles, n, config.time_step_length);
@@ -156,7 +160,7 @@ int main(int argc, char* argv[]) {
         // Ausgabe alle 100 Schritte
         if (t % 10 == 0) {
             cudaMemcpy(particles.data(), d_particles, n * sizeof(Particle), cudaMemcpyDeviceToHost);
-            writeToVTK(particles, t);
+            writeToVTK(particles, t, config.LSYS);
         }
     }
 

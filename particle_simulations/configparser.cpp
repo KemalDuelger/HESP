@@ -20,10 +20,14 @@ Config ConfigParser::parse(const std::string& filename) {
             config.num_time_step = std::stoi(line.substr(line.find("=") + 1));
         } else if (line.find("time_step_length") != std::string::npos) {
             config.time_step_length = std::stod(line.substr(line.find("=") + 1));
+        } else if (line.find("LSYS") != std::string::npos) {
+            config.LSYS = std::stoi(line.substr(line.find("=") + 1));
         } else if (line.find("sigma") != std::string::npos) {
             config.sigma = std::stod(line.substr(line.find("=") + 1));
         } else if (line.find("epsilon") != std::string::npos) {
             config.epsilon = std::stod(line.substr(line.find("=") + 1));
+        } else if (line.find("cut_off_radius") != std::string::npos) {
+            config.cut_off_radius = std::stod(line.substr(line.find("=") + 1));
         } else if (line.find("particle_num") != std::string::npos) {
             config.particle_num = std::stoi(line.substr(line.find("=") + 1));
         } else if (line.find("particle_positions") != std::string::npos) {
@@ -95,6 +99,10 @@ std::ostream& operator<<(std::ostream& os, const Config& config) {
     os << "Sigma: " << config.sigma << "\n";
     os << "Epsilon: " << config.epsilon << "\n";
     os << "Particle Count: " << config.particle_num << "\n";
+    os << "LSYS: " << config.LSYS << "\n";
+    os << "cut off radius: " << config.cut_off_radius << "\n";
+
+
 
     for (size_t i = 0; i < config.particles.size(); ++i) {
         os << "Particle " << i + 1 << ":\n" << config.particles[i] << "\n";

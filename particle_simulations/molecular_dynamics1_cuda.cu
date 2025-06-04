@@ -25,9 +25,9 @@ __global__ void computeForcesKernel(Particle* particles, int n, double epsilon, 
         double distance = sqrt(dx*dx + dy*dy + dz*dz);
 
         double lj = (24 * epsilon * pow(sigma / distance, 6) * (2 * pow(sigma / distance, 6) - 1)) / pow(distance, 2);
-        particles[i].force.x += lj * dx;
-        particles[i].force.y += lj * dy;
-        particles[i].force.z += lj * dz;
+        particles[i].force.x -= lj * dx;
+        particles[i].force.y -= lj * dy;
+        particles[i].force.z -= lj * dz;
     }
     // particles[i].force.y -= 9.81 * particles[i].mass;
 }

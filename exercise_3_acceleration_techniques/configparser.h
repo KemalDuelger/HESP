@@ -24,11 +24,12 @@ struct Particle {
 struct Config {
     int num_time_step = 0;
     double time_step_length = 0;
-    double sigma = 0.0f;
-    double epsilon = 0.0f;
-    int particle_num = 0;
-    std::vector<Particle> particles;
+    double sigma = 0.0;
+    double epsilon = 0.0;
+    int particle_num = 0.0;
+    double cut_off_radius = 0.0;
     int LSYS = 0;
+    std::vector<Particle> particles;
 };
 
 class ConfigParser {
