@@ -4,6 +4,8 @@
 #include <fstream>
 #include <cuda_runtime.h>
 #include "configparser.h"
+#include <chrono>
+
 
 void buildNeighbourList(const std::vector<Particle>& particles, double r_list, int LSYS,
                         std::vector<int>& neighbourList,
@@ -162,10 +164,14 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    
     Config config = ConfigParser::parse(argv[1]);
     std::vector<Particle> particles = config.particles;
     int n = particles.size();
     std::cout << config << std::endl;
+
+    // Zeitmessung starten
+    auto start = std::chrono::high_resolution_clock::now();
 
     // Neighbour List Speicher vorbereiten (Host)
     std::vector<int> neighbourList;
@@ -220,11 +226,18 @@ int main(int argc, char* argv[]) {
         }
     }
 
+
     cudaMemcpy(particles.data(), d_particles, n * sizeof(Particle), cudaMemcpyDeviceToHost);
     cudaFree(d_particles);
     cudaFree(d_neighbourList);
     cudaFree(d_neighbourListStarts);
     cudaFree(d_neighbourListLengths);
+
+    
+    // Zeitmessung beenden
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> diff = end - start;
+    std::cout << "Ausführungszeit: " << diff.count() << " Sekunden\n";
 
     return 0;
 }

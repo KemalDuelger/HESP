@@ -4,7 +4,7 @@
 #include <fstream>
 #include <cuda_runtime.h>
 #include "configparser.h"
-
+#include <chrono>
 
 // CUDA-Kernel für computeForces
 __global__ void computeForcesKernel(Particle* particles, int n, double epsilon, double sigma, int LSYS, double cut_off_radius) {
@@ -138,6 +138,10 @@ int main(int argc, char* argv[]) {
     int n = particles.size();
     std::cout << config << std::endl;
 
+    
+    // Zeitmessung starten
+    auto start = std::chrono::high_resolution_clock::now();
+    
     // Speicher auf GPU anlegen und kopieren
     Particle* d_particles;
     cudaMalloc(&d_particles, n * sizeof(Particle));
@@ -166,6 +170,11 @@ int main(int argc, char* argv[]) {
 
     cudaMemcpy(particles.data(), d_particles, n * sizeof(Particle), cudaMemcpyDeviceToHost);
     cudaFree(d_particles);
+
+        // Zeitmessung beenden
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> diff = end - start;
+    std::cout << "Ausführungszeit: " << diff.count() << " Sekunden\n";
 
     return 0;
 }
