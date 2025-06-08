@@ -5,7 +5,7 @@ sigma = 1;
 epsilon = 1;
 LSYS = 16;
 particle_num = 512;
-cut_off_radius = 5;
+cut_off_radius = 2.5;
 
 particle_positions =  {
     (1,1,1),
