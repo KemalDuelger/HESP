@@ -5,36 +5,65 @@
 #include <cuda_runtime.h>
 #include "configparser.h"
 
+void buildNeighbourList(const std::vector<Particle>& particles, double r_list, int LSYS,
+                        std::vector<int>& neighbourList,
+                        std::vector<int>& neighbourListStarts,
+                        std::vector<int>& neighbourListLengths) {
+    neighbourList.clear();
+    int n = particles.size();
+    for (int i = 0; i < n; ++i) {
+        neighbourListStarts[i] = neighbourList.size();
+        int count = 0;
+        for (int j = 0; j < n; ++j) {
+            if (i == j) continue;
+            double dx = particles[j].position.x - particles[i].position.x;
+            double dy = particles[j].position.y - particles[i].position.y;
+            double dz = particles[j].position.z - particles[i].position.z;
+            dx -= LSYS * round(dx / LSYS);
+            dy -= LSYS * round(dy / LSYS);
+            dz -= LSYS * round(dz / LSYS);
+
+            double r2 = dx * dx + dy * dy + dz * dz;
+            if (r2 < r_list * r_list) {
+                neighbourList.push_back(j);
+                ++count;
+            }
+        }
+        neighbourListLengths[i] = count;
+    }
+}
+
 
 // CUDA-Kernel für computeForces
-__global__ void computeForcesKernel(Particle* particles, int n, double epsilon, double sigma, int LSYS, double cut_off_radius) {
+__global__ void computeForcesNeighbourListKernel(Particle* particles, int n,
+    double epsilon, double sigma, int LSYS, double cut_off_radius,
+    const int* neighbourList, const int* neighbourListStarts, const int* neighbourListLengths) {
+
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= n) return;
 
     Particle& pi = particles[i];
-    pi.force.x = 0.0;
-    pi.force.y = 0.0;
-    pi.force.z = 0.0;
+    pi.force = {0.0, 0.0, 0.0};
 
-    for (int j = 0; j < n; ++j) {
-        if (i == j) continue;
+    int start = neighbourListStarts[i];
+    int length = neighbourListLengths[i];
 
+    for (int k = 0; k < length; ++k) {
+        int j = neighbourList[start + k];
         Particle& pj = particles[j];
+
         double dx = pj.position.x - pi.position.x;
         double dy = pj.position.y - pi.position.y;
         double dz = pj.position.z - pi.position.z;
-        // Minimum-Image-Kriterium
+
         dx -= LSYS * round(dx / LSYS);
         dy -= LSYS * round(dy / LSYS);
         dz -= LSYS * round(dz / LSYS);
 
         double r2 = dx * dx + dy * dy + dz * dz;
-
-        // Cut Off Radius
-        if (r2 > cut_off_radius*cut_off_radius) continue;
+        if (r2 > cut_off_radius * cut_off_radius) continue;
 
         double r = sqrt(r2);
-
         double s_over_r = sigma / r;
         double s_over_r6 = pow(s_over_r, 6);
         double lj_scalar = (24 * epsilon * s_over_r6 * (2 * s_over_r6 - 1)) / r2;
@@ -43,10 +72,8 @@ __global__ void computeForcesKernel(Particle* particles, int n, double epsilon, 
         pi.force.y -= lj_scalar * dy;
         pi.force.z -= lj_scalar * dz;
     }
-
-    // Optional: Schwerkraft in -y-Richtung hinzufügen
-    // pi.force.y -= 9.81 * pi.mass;
 }
+
 
 
 // Cuda-Methode fuer LSYS Berechnungen
@@ -138,10 +165,24 @@ int main(int argc, char* argv[]) {
     int n = particles.size();
     std::cout << config << std::endl;
 
+    // Neighbour List Speicher vorbereiten (Host)
+    std::vector<int> neighbourList;
+    std::vector<int> neighbourListStarts(config.particle_num);
+    std::vector<int> neighbourListLengths(config.particle_num);
+
+
     // Speicher auf GPU anlegen und kopieren
     Particle* d_particles;
     cudaMalloc(&d_particles, n * sizeof(Particle));
     cudaMemcpy(d_particles, particles.data(), n * sizeof(Particle), cudaMemcpyHostToDevice);
+
+    int* d_neighbourList;
+    int* d_neighbourListStarts;
+    int* d_neighbourListLengths;
+
+    cudaMalloc(&d_neighbourList, config.particle_num * config.particle_num * sizeof(int)); // worst case
+    cudaMalloc(&d_neighbourListStarts, config.particle_num * sizeof(int));
+    cudaMalloc(&d_neighbourListLengths, config.particle_num * sizeof(int));
 
     int threads = 128;
     int blocks = (n + threads - 1) / threads;
@@ -151,7 +192,20 @@ int main(int argc, char* argv[]) {
         updatePositionAndHalfStepVelocityKernel<<<blocks, threads>>>(d_particles, n, config.time_step_length, config.LSYS);
         cudaDeviceSynchronize();
 
-        computeForcesKernel<<<blocks, threads>>>(d_particles, n, config.epsilon, config.sigma, config.LSYS, config.cut_off_radius);
+        if (t % 10 == 0) {
+            cudaMemcpy(particles.data(), d_particles, n * sizeof(Particle), cudaMemcpyDeviceToHost);
+            
+            buildNeighbourList(particles, config.cut_off_radius * 1.1, config.LSYS,
+                            neighbourList, neighbourListStarts, neighbourListLengths);
+
+            cudaMemcpy(d_neighbourList, neighbourList.data(), neighbourList.size() * sizeof(int), cudaMemcpyHostToDevice);
+            cudaMemcpy(d_neighbourListStarts, neighbourListStarts.data(), n * sizeof(int), cudaMemcpyHostToDevice);
+            cudaMemcpy(d_neighbourListLengths, neighbourListLengths.data(), n * sizeof(int), cudaMemcpyHostToDevice);
+        }
+
+        computeForcesNeighbourListKernel<<<blocks, threads>>>(d_particles, n, config.epsilon, config.sigma, config.LSYS,
+                                                            config.cut_off_radius, d_neighbourList,
+                                                            d_neighbourListStarts, d_neighbourListLengths);
         cudaDeviceSynchronize();
 
         updateAccelerationAndFullStepVelocityKernel<<<blocks, threads>>>(d_particles, n, config.time_step_length);
@@ -166,6 +220,9 @@ int main(int argc, char* argv[]) {
 
     cudaMemcpy(particles.data(), d_particles, n * sizeof(Particle), cudaMemcpyDeviceToHost);
     cudaFree(d_particles);
+    cudaFree(d_neighbourList);
+    cudaFree(d_neighbourListStarts);
+    cudaFree(d_neighbourListLengths);
 
     return 0;
 }
