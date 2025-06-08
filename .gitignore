@@ -1,0 +1,15 @@
+# .gitignore für HESP-Projekt
+
+# Ignoriere alle .vtk-Dateien überall
+*.vtk
+
+# Ignoriere alle .exe-Dateien überall
+*.exe
+
+*.exp
+
+# Ignoriere alle .lib-Dateien überall
+*.lib
+
+# Ignoriere den gesamten vtk_files-Ordner (rekursiv)
+vtk_files/

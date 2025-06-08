@@ -43,7 +43,9 @@ __global__ void computeForcesNeighbourListKernel(Particle* particles, int n,
     if (i >= n) return;
 
     Particle& pi = particles[i];
-    pi.force = {0.0, 0.0, 0.0};
+    pi.force.x = 0.0;
+    pi.force.y = 0.0;
+    pi.force.z = 0.0;
 
     int start = neighbourListStarts[i];
     int length = neighbourListLengths[i];
