@@ -19,7 +19,6 @@ struct Particle {
     double mass;
     Vector3 force;
     Vector3 acceleration;
-    int cell_id;
 };
 
 struct Config {
