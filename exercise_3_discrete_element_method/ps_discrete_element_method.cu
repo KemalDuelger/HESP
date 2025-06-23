@@ -18,7 +18,7 @@ __global__ void buildCellListKernel(Particle* particles, int n, int* cell_head, 
     int iy = (int)(p.position.y / cutoff_radius);
     int iz = (int)(p.position.z / cutoff_radius);
 
-    // Periodische Bedingungen absichern (+ num_cells_per_dim um negative Indizes zu vermeiden)
+    // Periodische Bedingungen absichern
     ix = (ix + num_cells_per_dim) % num_cells_per_dim;
     iy = (iy + num_cells_per_dim) % num_cells_per_dim;
     iz = (iz + num_cells_per_dim) % num_cells_per_dim;
@@ -30,10 +30,13 @@ __global__ void buildCellListKernel(Particle* particles, int n, int* cell_head, 
 }
 
 // CUDA-Kernel für computeForces
-__global__ void computeForcesCellKernel(Particle* particles, int n, double epsilon, double sigma, 
-                                        int LSYS, double cutoff_radius,
-                                        int* cell_head, int* cell_next,
-                                        int num_cells_per_dim) {
+__global__ void computeForcesCellKernel(
+    Particle* particles, int n, double gamma, double K, 
+    int LSYS, double cutoff_radius,
+    int* cell_head, int* cell_next,
+    int num_cells_per_dim,
+    double gravity // gravity als Parameter, z.B. -9.81
+) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= n) return;
 
@@ -46,15 +49,18 @@ __global__ void computeForcesCellKernel(Particle* particles, int n, double epsil
     int iy = (int)(pi.position.y / cutoff_radius);
     int iz = (int)(pi.position.z / cutoff_radius);
 
+    // Nachbarsuche (keine Periodizität mehr!)
     for (int dx = -1; dx <= 1; ++dx) {
+        int nx = ix + dx;
+        if (nx < 0 || nx >= num_cells_per_dim) continue;
         for (int dy = -1; dy <= 1; ++dy) {
+            int ny = iy + dy;
+            if (ny < 0 || ny >= num_cells_per_dim) continue;
             for (int dz = -1; dz <= 1; ++dz) {
-                int nx = (ix + dx + num_cells_per_dim) % num_cells_per_dim;
-                int ny = (iy + dy + num_cells_per_dim) % num_cells_per_dim;
-                int nz = (iz + dz + num_cells_per_dim) % num_cells_per_dim;
+                int nz = iz + dz;
+                if (nz < 0 || nz >= num_cells_per_dim) continue;
 
                 int neighbor_cell = nx + ny * num_cells_per_dim + nz * num_cells_per_dim * num_cells_per_dim;
-
                 for (int j = cell_head[neighbor_cell]; j != -1; j = cell_next[j]) {
                     if (i == j) continue;
 
@@ -62,34 +68,33 @@ __global__ void computeForcesCellKernel(Particle* particles, int n, double epsil
                     double dx = pj.position.x - pi.position.x;
                     double dy = pj.position.y - pi.position.y;
                     double dz = pj.position.z - pi.position.z;
-
-                    dx -= LSYS * round(dx / LSYS);
-                    dy -= LSYS * round(dy / LSYS);
-                    dz -= LSYS * round(dz / LSYS);
-
-                    double r2 = dx * dx + dy * dy + dz * dz;
-                    if (r2 > cutoff_radius * cutoff_radius) continue;
-
-                    double r = sqrt(r2);
-                    double s_over_r = sigma / r;
-                    double s_over_r6 = pow(s_over_r, 6);
-                    double lj_scalar = (24 * epsilon * s_over_r6 * (2 * s_over_r6 - 1)) / r2;
-
-                    pi.force.x -= lj_scalar * dx;
-                    pi.force.y -= lj_scalar * dy;
-                    pi.force.z -= lj_scalar * dz;
+                    double dist = sqrt(dx*dx + dy*dy + dz*dz);
+                    if (dist < 1e-12) continue;
+                    double nx = dx / dist;
+                    double ny = dy / dist;
+                    double nz = dz / dist;
+                    double overlap = pi.radius + pj.radius - dist;
+                    if (overlap > 0.0) {
+                        double dvx = pj.velocity.x - pi.velocity.x;
+                        double dvy = pj.velocity.y - pi.velocity.y;
+                        double dvz = pj.velocity.z - pi.velocity.z;
+                        double v_rel = dvx * nx + dvy * ny + dvz * nz;
+                        double f_scalar = K * overlap + gamma * v_rel;
+                        pi.force.x += f_scalar * nx;
+                        pi.force.y += f_scalar * ny;
+                        pi.force.z += f_scalar * nz;
+                    }
                 }
             }
         }
     }
+
+
+
+    // Gravitation (z.B. in -y Richtung)
+    pi.force.y += gravity * pi.mass;
 }
 
-// Cuda-Methode fuer LSYS Berechnungen
-__device__ double wrapPosition(double pos, int limit) {
-    if (pos >= limit) return pos - limit;
-    if (pos < 0.0)    return pos + limit;
-    return pos;
-}
 
 // CUDA-Kernel für updatePositionAndHalfStepVelocity
 __global__ void updatePositionAndHalfStepVelocityKernel(Particle* particles, int n, double dt, int LSYS) {
@@ -105,10 +110,12 @@ __global__ void updatePositionAndHalfStepVelocityKernel(Particle* particles, int
     p.position.y += p.velocity.y * dt + p.acceleration.y * dt2;
     p.position.z += p.velocity.z * dt + p.acceleration.z * dt2;
 
-    // Apply periodic boundary conditions
-    p.position.x = wrapPosition(p.position.x, LSYS);
-    p.position.y = wrapPosition(p.position.y, LSYS);
-    p.position.z = wrapPosition(p.position.z, LSYS);
+    // Periodische Randbedingungen
+    // Sicherstellen, dass Partikel innerhalb des Systems bleiben
+    p.position.x = fmax(p.radius, fmin(LSYS - p.radius, p.position.x));
+    p.position.y = fmax(p.radius, fmin(LSYS - p.radius, p.position.y));
+    p.position.z = fmax(p.radius, fmin(LSYS - p.radius, p.position.z));
+
 
     // Half-step velocity update
     double half_dt = 0.5 * dt;
@@ -154,6 +161,10 @@ void writeToVTK(const std::vector<Particle>& particles, int step, int LSYS) {
     ofs << "SCALARS m double\nLOOKUP_TABLE default\n";
     for (const auto& p : particles) {
         ofs << p.mass << "\n";
+    }
+    ofs << "SCALARS radius double\nLOOKUP_TABLE default\n";
+    for (const auto& p : particles) {
+        ofs << p.radius << "\n";
     }
     ofs << "VECTORS v double\n";
     for (const auto& p : particles) {
@@ -217,8 +228,9 @@ int main(int argc, char* argv[]) {
             std::cerr << "Kernel Error: " << cudaGetErrorString(err) << std::endl;
         }
         
-        computeForcesCellKernel<<<blocks, threads>>>(d_particles, n, config.epsilon, config.sigma, config.LSYS,
-                                                 config.cut_off_radius, d_cell_head, d_cell_next, num_cells_per_dim);
+        computeForcesCellKernel<<<blocks, threads>>>(d_particles, n, config.gamma, config.K, config.LSYS,
+                                                    config.cut_off_radius, d_cell_head, d_cell_next, num_cells_per_dim,
+                                                    config.gravity);
         cudaDeviceSynchronize();
         err = cudaGetLastError();
         if (err != cudaSuccess) {
