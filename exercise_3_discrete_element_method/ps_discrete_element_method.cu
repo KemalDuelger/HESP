@@ -51,22 +51,16 @@ __global__ void computeForcesCellKernel(
 
     // Nachbarsuche (keine Periodizität mehr!)
    for (int dx = -1; dx <= 1; ++dx) {
-
         int nx = ix + dx;
-
         if (nx < 0 || nx >= num_cells_per_dim) continue;
 
         for (int dy = -1; dy <= 1; ++dy) {
-
             int ny = iy + dy;
-
             if (ny < 0 || ny >= num_cells_per_dim) continue;
 
             for (int dz = -1; dz <= 1; ++dz) {
-
                 int nz = iz + dz;
-
-                if (nz < 0 || nz >= num_cells_per_dim) continue; 
+                if (nz < 0 || nz >= num_cells_per_dim) continue;
 
                 int neighbor_cell = nx + ny * num_cells_per_dim + nz * num_cells_per_dim * num_cells_per_dim;
 
@@ -83,18 +77,15 @@ __global__ void computeForcesCellKernel(
                     double sphere_diameter = 2*pi.radius;
                     double xij = sqrt(dx*dx + dy*dy + dz*dz);
                     double overlap_cond = sphere_diameter - xij;
-                    double epsilon_x = 0;
-                    double epsilon_y = 0;
-                    double epsilon_z = 0;
-                    double nx = dx / xij;
-                    double ny = dy / xij;
-                    double nz = dz / xij;
-
 
                     if (overlap_cond >= 0.0) {
-                        epsilon_x = nx * overlap_cond;
-                        epsilon_y = ny * overlap_cond;
-                        epsilon_z = nz * overlap_cond;
+                        double nx = dx / xij;
+                        double ny = dy / xij;
+                        double nz = dz / xij;   
+
+                        double epsilon_x = nx * overlap_cond;
+                        double epsilon_y = ny * overlap_cond;
+                        double epsilon_z = nz * overlap_cond;
 
                         double epsilon_der_x = 0;
                         double epsilon_der_y = 0;
