@@ -66,7 +66,7 @@ __global__ void computeForcesCellKernel(
 
                 int nz = iz + dz;
 
-                if (nz < 0 || nz >= num_cells_per_dim) continue; The resultant expression for the force is quite simple:
+                if (nz < 0 || nz >= num_cells_per_dim) continue; 
 
                 int neighbor_cell = nx + ny * num_cells_per_dim + nz * num_cells_per_dim * num_cells_per_dim;
 
@@ -95,173 +95,53 @@ __global__ void computeForcesCellKernel(
                         epsilon_x = nx * overlap_cond;
                         epsilon_y = ny * overlap_cond;
                         epsilon_z = nz * overlap_cond;
-                    }
 
-                    double epsilon_der_x = 0;
-                    double epsilon_der_y = 0;
-                    double epsilon_der_z = 0;
+                        double epsilon_der_x = 0;
+                        double epsilon_der_y = 0;
+                        double epsilon_der_z = 0;
 
-                    if (sphere_diameter - fabs(dx) >= 0)
-                    {
                         epsilon_der_x = -nx * (nx * (pi.velocity.x - pj.velocity.x));
-                    }
-
-                    if (sphere_diameter - fabs(dy) >= 0)
-                    {
                         epsilon_der_y = -ny * (ny * (pi.velocity.y - pj.velocity.y));
-                    }
-
-                    if (sphere_diameter - fabs(dz) >= 0)
-                    {
                         epsilon_der_z = -nz * (nz * (pi.velocity.z - pj.velocity.z));
+
+                        pi.force.x += K* epsilon_x + gamma * epsilon_der_x;
+                        pi.force.y += K* epsilon_y + gamma * epsilon_der_y; 
+                        pi.force.z += K* epsilon_z + gamma * epsilon_der_z;
                     }
-
-                    pi.force.x += K* epsilon_x + gamma * epsilon_der_x;
-                    pi.force.y += K* epsilon_y + gamma * epsilon_der_y; 
-                    pi.force.z += K* epsilon_z + gamma * epsilon_der_z;
-
-                    /*
-
-                    if (overlap >= 0.0) { // Kontakt!
-
-                        // Einheitsvektor
-
-                        double nx = dx / dist;
-
-                        double ny = dy / dist;
-
-                        double nz = dz / dist;
-
-
-
-                        // Relativgeschwindigkeit in Richtung des Kontakts
-
-                        double dvx = pi.velocity.x - pj.velocity.x;
-
-                        double dvy = pi.velocity.y - pj.velocity.y;
-
-                        double dvz = pi.velocity.z - pj.velocity.z;
-
-                        double v_rel = dvx * nx + dvy * ny + dvz * nz;
-
-
-
-                        // Federkraft + Dämpfung
-
-                        double f_scalar = K * overlap + gamma * v_rel;
-
-
-
-                        pi.force.x += f_scalar * nx;
-
-                        pi.force.y += f_scalar * ny;
-
-                        pi.force.z += f_scalar * nz;
-
-                    }
-
-                    */
-
                 }
-
             }
+        }
+    }
 
+    // Position, Geschwindigkeit und Kraft-Komponenten des Teilchens pi
+    double position[3]   = { pi.position.x, pi.position.y, pi.position.z };
+    double velocity[3]   = { pi.velocity.x, pi.velocity.y, pi.velocity.z };
+    double* force[3]     = { &pi.force.x,   &pi.force.y,   &pi.force.z   };
+
+    // for loop fuer alle 3 dimensionen
+    for (int dimension = 0; dimension < 3; ++dimension) {
+
+        // Overlap mit "erster" Wand
+        double overlapWithLowerWall = pi.radius - position[dimension];
+
+        if (overlapWithLowerWall > 0.0) {
+            double relativeVelocity = -velocity[dimension];
+
+            double wallForce = K * overlapWithLowerWall + gamma * relativeVelocity;
+
+            *force[dimension] += wallForce;
         }
 
-    }
+        // Überlappung mit anderer seite
+        double overlapWithUpperWall = pi.radius - (LSYS - position[dimension]);
 
+        if (overlapWithUpperWall > 0.0) {
+            double relativeVelocity = -velocity[dimension];
+            double wallForce = K * overlapWithUpperWall + gamma * relativeVelocity;
 
-
-    double pos[3] = {pi.position.x, pi.position.y, pi.position.z};
-    double vel[3] = {pi.velocity.x, pi.velocity.y, pi.velocity.z};
-    double* force[3] = {&pi.force.x, &pi.force.y, &pi.force.z};
-
-
-    for (int d = 0; d < 3; ++d) {
-        double overlap = pi.radius - pos[d];
-        if (overlap > 0.0) {
-            double v_rel = -vel[d];
-            double f = K * overlap + gamma * v_rel;
-            *force[d] += f;
+            // Kraft in die gegenueberliegender Richtung
+            *force[dimension] -= wallForce;
         }
-
-        overlap = pi.radius - (LSYS - pos[d]);
-
-        if (overlap > 0.0) {
-            double v_rel = -vel[d];
-            double f = K * overlap + gamma * v_rel;
-            *force[d] -= f;
-        }
-
-    }
-
-    // Gravitation (z.B. in -y Richtung)
-
-    pi.force.y += gravity * pi.mass;
-
-}
-
-    // --- Wandkontakte (Box: 0 <= x,y,z <= LSYS) ---
-    double r = pi.radius;
-
-
-    // Linke Wand (x = 0)
-    double overlap = r - pi.position.x;
-
-    if (overlap > 0.0) {
-        double v_rel = -pi.velocity.x;
-        double f = K * overlap + gamma * v_rel;
-        pi.force.x += f;
-
-    }
-
-    // Rechte Wand (x = LSYS)
-    overlap = r - (LSYS - pi.position.x);
-
-    if (overlap > 0.0) {
-        double v_rel = -pi.velocity.x;
-        double f = K * overlap + gamma * v_rel;
-        pi.force.x -= f;
-
-    }
-
-    // Untere Wand (y = 0)
-    overlap = r - pi.position.y;
-
-    if (overlap > 0.0) {
-        double v_rel = -pi.velocity.y;
-        double f = K * overlap + gamma * v_rel;
-        pi.force.y += f;
-
-    }
-
-    // Obere Wand (y = LSYS)
-    overlap = r - (LSYS - pi.position.y);
-
-    if (overlap > 0.0) {
-        double v_rel = -pi.velocity.y;
-        double f = K * overlap + gamma * v_rel;
-        pi.force.y -= f;
-
-    }
-
-    // Vorderwand (z = 0)
-    overlap = r - pi.position.z;
-
-    if (overlap > 0.0) {
-        double v_rel = -pi.velocity.z;
-        double f = K * overlap + gamma * v_rel;
-        pi.force.z += f;
-    }
-
-    // Rückwand (z = LSYS)
-    overlap = r - (LSYS - pi.position.z);
-
-    if (overlap > 0.0) {
-        double v_rel = -pi.velocity.z;
-        double f = K * overlap + gamma * v_rel;
-        pi.force.z -= f;
-
     }
 
     // Gravitation (z.B. in -y Richtung)
@@ -284,12 +164,13 @@ __global__ void updatePositionAndHalfStepVelocityKernel(Particle* particles, int
     p.position.y += p.velocity.y * dt + p.acceleration.y * dt2;
     p.position.z += p.velocity.z * dt + p.acceleration.z * dt2;
 
+    /*
     // Periodische Randbedingungen
     // Sicherstellen, dass Partikel innerhalb des Systems bleiben
     p.position.x = fmax(p.radius, fmin(LSYS - p.radius, p.position.x));
     p.position.y = fmax(p.radius, fmin(LSYS - p.radius, p.position.y));
     p.position.z = fmax(p.radius, fmin(LSYS - p.radius, p.position.z));
-
+    */
 
     // Half-step velocity update
     double half_dt = 0.5 * dt;
@@ -418,7 +299,7 @@ int main(int argc, char* argv[]) {
             std::cerr << "Kernel Error: " << cudaGetErrorString(err) << std::endl;
         }
         // Ausgabe alle 100 Schritte
-        if (t % 10 == 0) {
+        if (t % 100 == 0) {
             cudaMemcpy(particles.data(), d_particles, n * sizeof(Particle), cudaMemcpyDeviceToHost);
             writeToVTK(particles, t, config.LSYS);
         }
