@@ -29,18 +29,16 @@ __global__ void buildCellListKernel(Particle* particles, int n, int* cell_head, 
     cell_next[i] = atomicExch(&cell_head[cell_idx], i);
 }
 
-// CUDA-Kernel für computeForces
 __global__ void computeForcesCellKernel(
-    Particle* particles, int n, double gamma, double K, 
-    int LSYS, double cutoff_radius,
-    int* cell_head, int* cell_next,
-    int num_cells_per_dim,
-    double gravity // gravity als Parameter, z.B. -9.81
-) {
+    Particle* particles, int n, double gamma, double K, int LSYS, double cutoff_radius,
+    int* cell_head, int* cell_next, int num_cells_per_dim, double gravity) {
+
     int i = blockIdx.x * blockDim.x + threadIdx.x;
+
     if (i >= n) return;
 
     Particle& pi = particles[i];
+
     pi.force.x = 0.0;
     pi.force.y = 0.0;   
     pi.force.z = 0.0;
@@ -49,50 +47,136 @@ __global__ void computeForcesCellKernel(
     int iy = (int)(pi.position.y / cutoff_radius);
     int iz = (int)(pi.position.z / cutoff_radius);
 
+
+
     // Nachbarsuche (keine Periodizität mehr!)
+
     for (int dx = -1; dx <= 1; ++dx) {
+
         int nx = ix + dx;
+
         if (nx < 0 || nx >= num_cells_per_dim) continue;
+
         for (int dy = -1; dy <= 1; ++dy) {
             int ny = iy + dy;
             if (ny < 0 || ny >= num_cells_per_dim) continue;
+
             for (int dz = -1; dz <= 1; ++dz) {
                 int nz = iz + dz;
                 if (nz < 0 || nz >= num_cells_per_dim) continue;
 
+
+
                 int neighbor_cell = nx + ny * num_cells_per_dim + nz * num_cells_per_dim * num_cells_per_dim;
                 for (int j = cell_head[neighbor_cell]; j != -1; j = cell_next[j]) {
-                    if (i == j) continue;
 
+                    if (i == j) continue;
                     Particle pj = particles[j];
+
                     double dx = pj.position.x - pi.position.x;
                     double dy = pj.position.y - pi.position.y;
                     double dz = pj.position.z - pi.position.z;
+
                     double dist = sqrt(dx*dx + dy*dy + dz*dz);
-                    if (dist < 1e-12) continue;
-                    double nx = dx / dist;
-                    double ny = dy / dist;
-                    double nz = dz / dist;
-                    double overlap = pi.radius + pj.radius - dist;
-                    if (overlap > 0.0) {
+                    double sigma = pi.radius + pj.radius;
+                    double overlap = sigma - dist;
+
+                    if (overlap > 0.0 && dist > 1e-12) { // Kontakt!
+                        // Einheitsvektor
+                        double nx = dx / dist;
+                        double ny = dy / dist;
+                        double nz = dz / dist;
+
+                        // Relativgeschwindigkeit in Richtung des Kontakts
                         double dvx = pj.velocity.x - pi.velocity.x;
                         double dvy = pj.velocity.y - pi.velocity.y;
                         double dvz = pj.velocity.z - pi.velocity.z;
+
                         double v_rel = dvx * nx + dvy * ny + dvz * nz;
+
+                        // Federkraft + Dämpfung
                         double f_scalar = K * overlap + gamma * v_rel;
+
                         pi.force.x += f_scalar * nx;
                         pi.force.y += f_scalar * ny;
                         pi.force.z += f_scalar * nz;
+
                     }
+
                 }
+
             }
+
         }
+
     }
 
+    // --- Wandkontakte (Box: 0 <= x,y,z <= LSYS) ---
+    double r = pi.radius;
 
+
+    // Linke Wand (x = 0)
+    double overlap = r - pi.position.x;
+
+    if (overlap > 0.0) {
+        double v_rel = -pi.velocity.x;
+        double f = K * overlap + gamma * v_rel;
+        pi.force.x += f;
+
+    }
+
+    // Rechte Wand (x = LSYS)
+    overlap = r - (LSYS - pi.position.x);
+
+    if (overlap > 0.0) {
+        double v_rel = -pi.velocity.x;
+        double f = K * overlap + gamma * v_rel;
+        pi.force.x -= f;
+
+    }
+
+    // Untere Wand (y = 0)
+    overlap = r - pi.position.y;
+
+    if (overlap > 0.0) {
+        double v_rel = -pi.velocity.y;
+        double f = K * overlap + gamma * v_rel;
+        pi.force.y += f;
+
+    }
+
+    // Obere Wand (y = LSYS)
+    overlap = r - (LSYS - pi.position.y);
+
+    if (overlap > 0.0) {
+        double v_rel = -pi.velocity.y;
+        double f = K * overlap + gamma * v_rel;
+        pi.force.y -= f;
+
+    }
+
+    // Vorderwand (z = 0)
+    overlap = r - pi.position.z;
+
+    if (overlap > 0.0) {
+        double v_rel = -pi.velocity.z;
+        double f = K * overlap + gamma * v_rel;
+        pi.force.z += f;
+    }
+
+    // Rückwand (z = LSYS)
+    overlap = r - (LSYS - pi.position.z);
+
+    if (overlap > 0.0) {
+        double v_rel = -pi.velocity.z;
+        double f = K * overlap + gamma * v_rel;
+        pi.force.z -= f;
+
+    }
 
     // Gravitation (z.B. in -y Richtung)
     pi.force.y += gravity * pi.mass;
+
 }
 
 
