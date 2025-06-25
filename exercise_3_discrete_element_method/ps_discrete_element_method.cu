@@ -50,58 +50,117 @@ __global__ void computeForcesCellKernel(
 
 
     // Nachbarsuche (keine Periodizität mehr!)
-
-    for (int dx = -1; dx <= 1; ++dx) {
+   for (int dx = -1; dx <= 1; ++dx) {
 
         int nx = ix + dx;
 
         if (nx < 0 || nx >= num_cells_per_dim) continue;
 
         for (int dy = -1; dy <= 1; ++dy) {
+
             int ny = iy + dy;
+
             if (ny < 0 || ny >= num_cells_per_dim) continue;
 
             for (int dz = -1; dz <= 1; ++dz) {
+
                 int nz = iz + dz;
-                if (nz < 0 || nz >= num_cells_per_dim) continue;
 
-
+                if (nz < 0 || nz >= num_cells_per_dim) continue; The resultant expression for the force is quite simple:
 
                 int neighbor_cell = nx + ny * num_cells_per_dim + nz * num_cells_per_dim * num_cells_per_dim;
+
                 for (int j = cell_head[neighbor_cell]; j != -1; j = cell_next[j]) {
 
                     if (i == j) continue;
+
                     Particle pj = particles[j];
 
-                    double dx = pj.position.x - pi.position.x;
-                    double dy = pj.position.y - pi.position.y;
-                    double dz = pj.position.z - pi.position.z;
+                    double dx = pi.position.x - pj.position.x;
+                    double dy = pi.position.y - pj.position.y;
+                    double dz = pi.position.z - pj.position.z;
 
-                    double dist = sqrt(dx*dx + dy*dy + dz*dz);
-                    double sigma = pi.radius + pj.radius;
-                    double overlap = sigma - dist;
+                    double sphere_diameter = 2*pi.radius;
+                    double xij = sqrt(dx*dx + dy*dy + dz*dz);
+                    double overlap_cond = sphere_diameter - xij;
+                    double epsilon_x = 0;
+                    double epsilon_y = 0;
+                    double epsilon_z = 0;
+                    double nx = dx / xij;
+                    double ny = dy / xij;
+                    double nz = dz / xij;
 
-                    if (overlap > 0.0 && dist > 1e-12) { // Kontakt!
+
+                    if (overlap_cond >= 0.0) {
+                        epsilon_x = nx * overlap_cond;
+                        epsilon_y = ny * overlap_cond;
+                        epsilon_z = nz * overlap_cond;
+                    }
+
+                    double epsilon_der_x = 0;
+                    double epsilon_der_y = 0;
+                    double epsilon_der_z = 0;
+
+                    if (sphere_diameter - fabs(dx) >= 0)
+                    {
+                        epsilon_der_x = -nx * (nx * (pi.velocity.x - pj.velocity.x));
+                    }
+
+                    if (sphere_diameter - fabs(dy) >= 0)
+                    {
+                        epsilon_der_y = -ny * (ny * (pi.velocity.y - pj.velocity.y));
+                    }
+
+                    if (sphere_diameter - fabs(dz) >= 0)
+                    {
+                        epsilon_der_z = -nz * (nz * (pi.velocity.z - pj.velocity.z));
+                    }
+
+                    pi.force.x += K* epsilon_x + gamma * epsilon_der_x;
+                    pi.force.y += K* epsilon_y + gamma * epsilon_der_y; 
+                    pi.force.z += K* epsilon_z + gamma * epsilon_der_z;
+
+                    /*
+
+                    if (overlap >= 0.0) { // Kontakt!
+
                         // Einheitsvektor
+
                         double nx = dx / dist;
+
                         double ny = dy / dist;
+
                         double nz = dz / dist;
 
+
+
                         // Relativgeschwindigkeit in Richtung des Kontakts
-                        double dvx = pj.velocity.x - pi.velocity.x;
-                        double dvy = pj.velocity.y - pi.velocity.y;
-                        double dvz = pj.velocity.z - pi.velocity.z;
+
+                        double dvx = pi.velocity.x - pj.velocity.x;
+
+                        double dvy = pi.velocity.y - pj.velocity.y;
+
+                        double dvz = pi.velocity.z - pj.velocity.z;
 
                         double v_rel = dvx * nx + dvy * ny + dvz * nz;
 
+
+
                         // Federkraft + Dämpfung
+
                         double f_scalar = K * overlap + gamma * v_rel;
 
+
+
                         pi.force.x += f_scalar * nx;
+
                         pi.force.y += f_scalar * ny;
+
                         pi.force.z += f_scalar * nz;
 
                     }
+
+                    */
 
                 }
 
@@ -110,6 +169,37 @@ __global__ void computeForcesCellKernel(
         }
 
     }
+
+
+
+    double pos[3] = {pi.position.x, pi.position.y, pi.position.z};
+    double vel[3] = {pi.velocity.x, pi.velocity.y, pi.velocity.z};
+    double* force[3] = {&pi.force.x, &pi.force.y, &pi.force.z};
+
+
+    for (int d = 0; d < 3; ++d) {
+        double overlap = pi.radius - pos[d];
+        if (overlap > 0.0) {
+            double v_rel = -vel[d];
+            double f = K * overlap + gamma * v_rel;
+            *force[d] += f;
+        }
+
+        overlap = pi.radius - (LSYS - pos[d]);
+
+        if (overlap > 0.0) {
+            double v_rel = -vel[d];
+            double f = K * overlap + gamma * v_rel;
+            *force[d] -= f;
+        }
+
+    }
+
+    // Gravitation (z.B. in -y Richtung)
+
+    pi.force.y += gravity * pi.mass;
+
+}
 
     // --- Wandkontakte (Box: 0 <= x,y,z <= LSYS) ---
     double r = pi.radius;
